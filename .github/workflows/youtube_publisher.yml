@@ -1,0 +1,73 @@
+name: Scheduled YouTube IPO Shorts Publisher
+
+on:
+  schedule:
+    # 1) Morning Run: 09:30 AM IST (04:00 UTC) - Every day (Mon - Sun, 7 days/week)
+    - cron: '0 4 * * *'
+    # 2) Evening Run: 07:30 PM IST (14:00 UTC) - Every day (Mon - Sun, 7 days/week)
+    - cron: '0 14 * * *'
+
+  workflow_dispatch:
+    inputs:
+      privacy_status:
+        description: 'Privacy status (public, unlisted, private)'
+        required: false
+        default: 'public'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: youtube-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish-shorts:
+    name: Sync Drive, Generate SEO & Publish to YouTube
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install NPM Dependencies
+        run: npm ci
+
+      - name: Run YouTube Auto-Publisher Pipeline
+        env:
+          GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
+          GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
+          GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
+          GDRIVE_PARENT_FOLDER_ID: ${{ secrets.GDRIVE_PARENT_FOLDER_ID }}
+          YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
+          YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
+          YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: 'llama-3.3-70b-versatile'
+          YOUTUBE_PRIVACY_STATUS: ${{ github.event.inputs.privacy_status || 'public' }}
+          YOUTUBE_CATEGORY_ID: '27'
+          YOUTUBE_DEFAULT_LANGUAGE: 'en'
+        run: npm run publish
+
+      - name: Commit & Push Updated Upload Tracker
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/uploaded_youtube.json
+          if git diff --staged --quiet; then
+            echo "✨ No new videos uploaded. Tracker is up-to-date."
+          else
+            git commit -m "chore: record new YouTube video upload [skip ci]"
+            git push origin main
+            echo "✅ Tracker committed and pushed to main."
+          fi

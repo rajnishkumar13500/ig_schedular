@@ -1,0 +1,34 @@
+{
+  "name": "ipo-youtube-publisher",
+  "version": "1.0.0",
+  "description": "Automated YouTube Shorts publisher and viral metadata generator for IPO videos",
+  "main": "scripts/pipeline.ts",
+  "scripts": {
+    "auth:youtube": "tsx scripts/auth_youtube.ts",
+    "test:youtube": "tsx scripts/test_youtube.ts",
+    "sync:drive": "tsx scripts/sync_drive.ts",
+    "generate:metadata": "tsx scripts/generate_metadata.ts",
+    "publish": "tsx scripts/pipeline.ts",
+    "pipeline": "tsx scripts/pipeline.ts"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "googleapis": "^144.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "keywords": [
+    "ipo",
+    "youtube",
+    "automation",
+    "publisher",
+    "groq",
+    "qwen",
+    "seo"
+  ],
+  "author": "",
+  "license": "ISC"
+}
