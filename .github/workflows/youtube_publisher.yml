@@ -57,11 +57,11 @@ jobs:
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: 'llama-3.3-70b-versatile'
+          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'qwen/qwen3.8-27b' }}
           YOUTUBE_AUTO_SCHEDULE: ${{ github.event.inputs.auto_schedule || 'true' }}
           YOUTUBE_PRIVACY_STATUS: ${{ github.event.inputs.privacy_status || 'private' }}
-          YOUTUBE_CATEGORY_ID: '27'
-          YOUTUBE_DEFAULT_LANGUAGE: 'en'
+          YOUTUBE_CATEGORY_ID: ${{ vars.YOUTUBE_CATEGORY_ID || '27' }}
+          YOUTUBE_DEFAULT_LANGUAGE: ${{ vars.YOUTUBE_DEFAULT_LANGUAGE || 'en' }}
         run: npm run publish
 
       - name: Commit & Push Updated Upload Tracker
