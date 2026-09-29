@@ -71,7 +71,7 @@ flowchart TD
 - **Solution**:
   - Once a video is successfully uploaded and scheduled on YouTube:
     1. The publisher checks for (or creates) an **`Uploaded`** folder inside the Google Drive root.
-    2. Moves the entire company folder (video + `assets/ipo_data.json` + `assets/script.txt`) from `IPO Automation` into `Uploaded/` using Google Drive API:
+    2. Moves the **entire company folder and 100% of all its contents** (all videos, assets, audio, scripts, images, and data files) from `IPO Automation` into `Uploaded/` by updating the parent of `folderId`:
        ```typescript
        await drive.files.update({
          fileId: folderId,
