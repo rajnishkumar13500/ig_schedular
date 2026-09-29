@@ -73,6 +73,7 @@ jobs:
             echo "✨ No new videos uploaded. Tracker is up-to-date."
           else
             git commit -m "chore: record new YouTube video upload [skip ci]"
+            git pull --rebase origin main
             git push origin main
             echo "✅ Tracker committed and pushed to main."
           fi
