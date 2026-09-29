@@ -67,4 +67,6 @@ async function testYouTube() {
   }
 }
 
-testYouTube();
+if (require.main === module) {
+  testYouTube();
+}

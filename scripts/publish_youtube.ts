@@ -16,22 +16,45 @@ export interface YouTubeUploadResult {
 }
 
 /**
- * Calculates next prime publishing window in ISO 8601 UTC
+ * Calculates a 24-hour forward schedule time in ISO 8601 UTC.
+ * - Morning runs (before 14:00 IST) schedule for Tomorrow Morning at 09:00 AM IST (03:30 UTC)
+ * - Evening runs (at or after 14:00 IST) schedule for Tomorrow Evening at 06:30 PM IST (13:00 UTC)
+ *
+ * This provides a ~23-24 hour forward gap that is 100% immune to GitHub Actions runner queue delays.
  */
-export function calculateScheduleTime(targetHourIST: number = 18): string {
+export function calculate24HourScheduleTime(): { publishAtIso: string; slotDescription: string } {
   const now = new Date();
-  // Target IST is UTC + 5:30. So UTC hour = targetHourIST - 5, min = 30
-  const utcTargetHour = (targetHourIST - 5 + 24) % 24;
-  const targetDate = new Date();
 
-  targetDate.setUTCHours(utcTargetHour, 30, 0, 0);
+  // Convert current time to IST (UTC + 5:30)
+  const istOffsetMs = 5.5 * 60 * 60 * 1000;
+  const nowIST = new Date(now.getTime() + istOffsetMs);
+  const currentHourIST = nowIST.getUTCHours(); // Hour in IST
 
-  // If already past target today, schedule for tomorrow
-  if (targetDate.getTime() <= now.getTime() + 15 * 60 * 1000) {
+  const isMorningRun = currentHourIST < 14;
+
+  // Target IST time tomorrow:
+  // Morning slot: 09:00 AM IST -> 03:30 UTC
+  // Evening slot: 06:30 PM IST (18:30) -> 13:00 UTC
+  const targetUtcHour = isMorningRun ? 3 : 13;
+  const targetUtcMinute = isMorningRun ? 30 : 0;
+  const slotDescription = isMorningRun
+    ? "Tomorrow Morning (09:00 AM IST)"
+    : "Tomorrow Evening (06:30 PM IST)";
+
+  // Tomorrow's date in UTC
+  const targetDate = new Date(now.getTime());
+  targetDate.setUTCDate(targetDate.getUTCDate() + 1);
+  targetDate.setUTCHours(targetUtcHour, targetUtcMinute, 0, 0);
+
+  // Safety buffer: ensure targetDate is at least 12 hours in the future
+  if (targetDate.getTime() - now.getTime() < 12 * 60 * 60 * 1000) {
     targetDate.setUTCDate(targetDate.getUTCDate() + 1);
   }
 
-  return targetDate.toISOString();
+  return {
+    publishAtIso: targetDate.toISOString(),
+    slotDescription,
+  };
 }
 
 /**
@@ -59,10 +82,12 @@ export async function uploadToYouTube(
 
   const autoSchedule = process.env.YOUTUBE_AUTO_SCHEDULE === "true";
   if (autoSchedule) {
-    const hourIST = parseInt(process.env.YOUTUBE_SCHEDULE_HOUR_IST || "18", 10);
-    publishAt = calculateScheduleTime(hourIST);
+    const { publishAtIso, slotDescription } = calculate24HourScheduleTime();
+    publishAt = publishAtIso;
     privacyStatus = "private";
-    console.log(`   ⏰ Video will be scheduled for: ${publishAt} (IST hour: ${hourIST}:30)`);
+    console.log(`   ⏰ 24-Hour Forward Scheduling Activated!`);
+    console.log(`      Target Slot:     ${slotDescription}`);
+    console.log(`      Scheduled (UTC): ${publishAt}`);
   } else {
     console.log(`   🔒 Privacy Status: ${privacyStatus}`);
   }

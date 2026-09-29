@@ -1,7 +1,12 @@
 import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
-import { getUnprocessedIPOsFromDrive, downloadIPOAssetsFromDrive } from "./sync_drive";
+import {
+  getUnprocessedIPOsFromDrive,
+  folderContainsVideo,
+  downloadIPOAssetsFromDrive,
+  moveFolderToArchive,
+} from "./sync_drive";
 import { generateYouTubeMetadata } from "./generate_metadata";
 import { uploadToYouTube } from "./publish_youtube";
 import { recordYouTubeUpload } from "./tracker";
@@ -18,23 +23,31 @@ async function runPublisherPipeline() {
   const unprocessed = await getUnprocessedIPOsFromDrive();
 
   if (unprocessed.length === 0) {
-    console.log("\n✨ All videos on Google Drive have already been uploaded to YouTube! Nothing to do.");
+    console.log("\n✨ All videos on Google Drive have already been processed/uploaded! Exiting cleanly.");
     return;
   }
 
   const selected = unprocessed[0];
-  console.log(`\n👉 Selected for YouTube Upload: "${selected.name}" (${selected.slug})`);
+  console.log(`\n👉 Selected candidate for publishing: "${selected.name}" (${selected.slug})`);
+
+  // 1.5 Verify that the folder contains a valid .mp4 video
+  const hasVideo = await folderContainsVideo(selected.id);
+  if (!hasVideo) {
+    console.log(`\n⚠️ No .mp4 video found in folder "${selected.name}".`);
+    console.log(`   Stopping automation gracefully (no video ready to publish yet).`);
+    return;
+  }
 
   // 2. Download Video & Assets from Google Drive
   console.log("\n📥 Step 2: Downloading video and metadata from Google Drive...");
   const assets = await downloadIPOAssetsFromDrive(selected);
 
   if (!assets) {
-    console.error(`❌ Failed to download assets for ${selected.name}`);
-    process.exit(1);
+    console.warn(`⚠️ Could not retrieve assets for "${selected.name}". Gracefully exiting.`);
+    return;
   }
 
-  // 3. Generate Viral YouTube Metadata via Groq Qwen/Llama
+  // 3. Generate Viral YouTube Metadata via Groq (Qwen/Llama)
   console.log("\n🤖 Step 3: Generating viral metadata with AI (Groq)...");
   const metadata = await generateYouTubeMetadata(
     assets.folderName,
@@ -42,12 +55,20 @@ async function runPublisherPipeline() {
     assets.scriptText
   );
 
-  // 4. Upload and Publish to YouTube
-  console.log("\n📺 Step 4: Uploading video and publishing to YouTube...");
+  // 4. Upload and Schedule to YouTube (24-Hour Forward Buffer)
+  console.log("\n📺 Step 4: Uploading video and scheduling on YouTube...");
   const uploadResult = await uploadToYouTube(assets.videoPath, metadata);
 
-  // 5. Update Tracker
-  console.log("\n💾 Step 5: Updating YouTube upload tracker store...");
+  // 5. Move Processed Folder on Google Drive to 'Uploaded/'
+  console.log("\n📁 Step 5: Moving company folder to 'Uploaded/' on Google Drive...");
+  try {
+    await moveFolderToArchive(selected.id, selected.name, "Uploaded");
+  } catch (driveErr: any) {
+    console.warn("⚠️ Warning: Failed to move folder to 'Uploaded/' on Google Drive:", driveErr.message || driveErr);
+  }
+
+  // 6. Update Local Tracker Store
+  console.log("\n💾 Step 6: Updating YouTube upload tracker store...");
   recordYouTubeUpload({
     ipoSlug: assets.slug,
     companyName: assets.folderName,
@@ -60,20 +81,21 @@ async function runPublisherPipeline() {
     pinnedCommentId: uploadResult.pinnedCommentId,
   });
 
-  // 6. Cleanup local temp files
+  // 7. Cleanup local temp files
   try {
     fs.rmSync(path.dirname(assets.videoPath), { recursive: true, force: true });
-    console.log("🧹 Cleaned up temporary video cache.");
+    console.log("🧹 Cleaned up temporary local video cache.");
   } catch (_) {}
 
   console.log("\n==================================================");
-  console.log("🎉  YOUTUBE PUBLICATION COMPLETE!");
-  console.log(`📺  Video Title: ${uploadResult.title}`);
-  console.log(`🔗  YouTube URL: ${uploadResult.videoUrl}`);
-  console.log(`🔒  Status:      ${uploadResult.privacyStatus}`);
+  console.log("🎉  YOUTUBE PUBLICATION & SCHEDULING COMPLETE!");
+  console.log(`📺  Video Title:  ${uploadResult.title}`);
+  console.log(`🔗  YouTube URL:  ${uploadResult.videoUrl}`);
+  console.log(`🔒  Status:       ${uploadResult.privacyStatus}`);
   if (uploadResult.scheduledFor) {
-    console.log(`⏰  Scheduled:   ${uploadResult.scheduledFor}`);
+    console.log(`⏰  Scheduled:    ${uploadResult.scheduledFor}`);
   }
+  console.log(`📁  Drive Status: Moved to 'Uploaded/' folder`);
   console.log("==================================================");
 }
 

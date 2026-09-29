@@ -9,10 +9,14 @@ on:
 
   workflow_dispatch:
     inputs:
-      privacy_status:
-        description: 'Privacy status (public, unlisted, private)'
+      auto_schedule:
+        description: 'Auto schedule video 24h forward (true/false)'
         required: false
-        default: 'public'
+        default: 'true'
+      privacy_status:
+        description: 'Privacy status (public, unlisted, private) - used if auto_schedule is false'
+        required: false
+        default: 'private'
 
 permissions:
   contents: write
@@ -54,7 +58,8 @@ jobs:
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
           GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
           GROQ_MODEL: 'llama-3.3-70b-versatile'
-          YOUTUBE_PRIVACY_STATUS: ${{ github.event.inputs.privacy_status || 'public' }}
+          YOUTUBE_AUTO_SCHEDULE: ${{ github.event.inputs.auto_schedule || 'true' }}
+          YOUTUBE_PRIVACY_STATUS: ${{ github.event.inputs.privacy_status || 'private' }}
           YOUTUBE_CATEGORY_ID: '27'
           YOUTUBE_DEFAULT_LANGUAGE: 'en'
         run: npm run publish

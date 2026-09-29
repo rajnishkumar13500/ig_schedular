@@ -1,144 +1,151 @@
-# 🎬 IPO YouTube Auto-Publisher: End-to-End Architectural Flow
+# 🎬 IPO YouTube Auto-Publisher: Updated End-to-End Architectural Flow
 
-This document details the complete end-to-end lifecycle of how finished IPO videos stored on **Google Drive** are automatically discovered, enhanced with **viral AI metadata (Groq Qwen/Llama)**, uploaded via the **YouTube Data API v3**, and scheduled for maximum viewer retention.
+This document details the refined, production-grade lifecycle of how finished IPO videos stored on **Google Drive** are discovered, validated, enhanced with **viral AI metadata (Groq Qwen/Llama)**, scheduled via **YouTube Data API v3** with a **24-hour forward buffer**, and archived into a dedicated **`Uploaded/`** Drive folder.
 
 ---
 
-## 1. High-Level Flowchart
+## 1. Updated Architectural Flowchart
 
 ```mermaid
 flowchart TD
-    A[Google Drive Folder\n'IPO Automation'] -->|1. List Folders| B[scripts/sync_drive.ts\nScan for Company Folders]
-    B --> C{Check data/uploaded_youtube.json\nAlready on YouTube?}
-    C -- Yes --> D[Skip: Already Processed]
-    C -- No --> E[Download Assets to temp/slug/\n• [slug].mp4\n• assets/ipo_data.json\n• assets/script.txt]
+    A["Google Drive Folder\n'IPO Automation'"] -->|1. List Folders| B["Scan for Company Folders\n(scripts/sync_drive.ts)"]
     
-    E --> F[scripts/generate_metadata.ts\nGroq Cloud LPU: Qwen 3.8 / Llama 3.3]
+    B --> C{"Check data/uploaded_youtube.json\nAlready Tracked?"}
+    C -- Yes --> D["Skip: Already Published"]
+    C -- No --> E{"Check for .mp4 Video\nin Company Folder?"}
     
-    subgraph AI Viral Metadata Engine
-        F --> G1["📌 Viral Title\n(<70 chars + #Shorts)"]
-        F --> G2["📝 SEO Description\n(Specs, Disclaimers, Hashtags)"]
-        F --> G3["🏷️ Search Tags\n(15-20 High-Volume Keywords)"]
-        F --> G4["💬 Pinned Comment\n(High-Engagement Question)"]
+    E -- "No Video Found" --> F["⚠️ Log Warning & Stop Gracefully\n(Exit 0 - No Pipeline Failure)"]
+    E -- "Video Present" --> G["Download Assets to temp/slug/\n• video.mp4\n• ipo_data.json\n• script.txt"]
+    
+    G --> H["Company Name Sanitizer\nStrip 'Limited', 'Pvt Ltd', 'Technologies'\nEnsure Base Name ≤ 22 Chars"]
+    
+    H --> I["AI Viral Metadata Engine\n(Groq Cloud: Llama 3.3 / Qwen 3.8)"]
+    
+    subgraph AI Viral Metadata & SEO Optimization
+        I --> J1["📌 Clamped Viral Title\n(Strictly ≤ 65-70 chars + #Shorts)"]
+        I --> J2["📝 SEO Description\n(Snapshot, Financials, SEBI Disclaimer)"]
+        I --> J3["🏷️ Search Tags\n(15-20 High-Volume Keywords)"]
+        I --> J4["💬 Pinned Question Comment\n(Algorithm Retention Magnet)"]
     end
     
-    G1 & G2 & G3 & G4 --> H[scripts/publish_youtube.ts\nYouTube Data API v3 Resumable Upload]
+    J1 & J2 & J3 & J4 --> K["YouTube Data API v3\nResumable Video Upload"]
     
-    H --> I{Scheduling Mode}
-    I -->|Immediate| J[Publish Public / Unlisted]
-    I -->|Auto-Schedule| K[Schedule for Peak IST Windows\n10:00 AM or 06:30 PM]
+    K --> L["24-Hour Forward Scheduling Engine\n• Morning Run ➔ Next Morning (09:00 AM IST)\n• Evening Run ➔ Next Evening (06:30 PM IST)\n(100% Immune to GitHub Runner Queue Delays)"]
     
-    H --> L[Auto-Post Engagement Comment\nvia commentThreads.insert]
-    L --> M[scripts/tracker.ts\nUpdate data/uploaded_youtube.json]
-    M --> N[Clean up temp/slug/ directory\nZero local disk footprint]
-    N --> O[Git Auto-Commit [skip ci]\nPush updated tracker to GitHub]
+    L --> M["Auto-Post Pinned Comment\n(commentThreads.insert)"]
+    
+    M --> N["Move Drive Folder to 'Uploaded/'\n(drive.files.update addParents/removeParents)\nZero Clutter in Incoming Folder"]
+    
+    N --> O["Update data/uploaded_youtube.json\n(Sliding 50-Item FIFO Tracker)"]
+    
+    O --> P["Purge Local temp/ Cache\n(Zero Local Disk Footprint)"]
+    
+    P --> Q["Git Auto-Commit [skip ci]\nPush Updated Tracker to GitHub"]
 ```
 
 ---
 
-## 2. Step-by-Step Execution Breakdown
+## 2. Key Enhancements & Refinements
 
-### Step 1: Google Drive Sync & Ingestion (`scripts/sync_drive.ts`)
-
-1. **Authentication**: Uses Google OAuth2 refresh token (`GDRIVE_REFRESH_TOKEN`) with `GDRIVE_CLIENT_ID` and `GDRIVE_CLIENT_SECRET`.
-2. **Folder Discovery**:
-   - Queries `GDRIVE_PARENT_FOLDER_ID` (the `IPO Automation` root folder).
-   - Fetches all company subfolders (e.g., `POOJA LOGISTICS`, `MONEY VIEW`).
-3. **Deduplication Check**:
-   - Cross-checks folder names and normalized slugs against `data/uploaded_youtube.json`.
-   - If a video has already been published to YouTube, it is skipped immediately.
-4. **Asset Streaming & Download**:
-   - Downloads the high-definition vertical video: `[slug].mp4` ➔ `temp/[slug]/[slug].mp4`.
-   - Downloads the financial dataset: `assets/ipo_data.json` ➔ `temp/[slug]/ipo_data.json`.
-   - Downloads the spoken voiceover transcript: `assets/script.txt` ➔ `temp/[slug]/script.txt`.
-
----
-
-### Step 2: Viral AI Metadata & SEO Generation (`scripts/generate_metadata.ts`)
-
-The raw financial dataset and spoken script are passed to **Groq Cloud** running `llama-3.3-70b-versatile` / `qwen/qwen3.8-27b` with a specialized financial prompt.
-
-#### 1. Viral Title Strategy (`title`)
-- **Formula**: `[Company Name] IPO: [Hook / Curiosity Angle] [Urgency/Warning Emoji] #Shorts`
-- **Rules**:
-  - Strictly under **70 characters** so it doesn't get truncated on mobile YouTube feeds.
-  - Must include the `#Shorts` hashtag so YouTube indexes it into the Shorts shelf.
-  - Uses high-CTR psychological triggers: *"Apply or Avoid?"*, *"Hidden Trap?"*, *"Truth Revealed!"*.
-  - *Example*: `POOJA LOGISTICS IPO Review: Apply or Avoid? 🚨 #Shorts`
-
-#### 2. Rich SEO Description (`description`)
-The description is structured into 5 strategic zones:
-1. **Above-the-Fold Hook**: The first 2 lines summarize the core verdict before the user clicks *"more"*.
-2. **📌 IPO Quick Snapshot**:
-   - Issue Size (e.g. ₹214.48 Cr)
-   - Price Band & Lot Size
-   - Open, Close & Listing Dates
-3. **📊 Financial Health Highlights**:
-   - Topline revenue growth rate
-   - Profit after tax (PAT) and operating margin trends
-4. **⚠️ SEBI Compliance Disclaimer**:
-   - *"Disclaimer: Strictly for educational purposes only. Not investment or financial advice. Consult a SEBI-registered advisor before investing."*
-5. **🏷️ Trending Hashtags**:
-   - 5–8 targeted hashtags (e.g. `#PoojaLogisticsIPO #IPONews #StockMarketIndia #Shorts #IPOReview`).
-
-#### 3. Search Optimization Tags (`tags`)
-YouTube allows up to 500 characters of tags. The engine builds 15–20 high-intent keywords combining:
-- **Brand Keywords**: `pooja logistics`, `pooja logistics ipo`, `pooja logistics limited`
-- **Transaction Intent**: `pooja logistics ipo apply or avoid`, `pooja logistics ipo gmp`, `pooja logistics ipo review`
-- **Broad Market Queries**: `upcoming ipos 2026`, `latest ipo review`, `stock market india`, `share market shorts`
-- **Listing Queries**: `pooja logistics allotment status`, `pooja logistics listing date`
-
-#### 4. High-Engagement Pinned Comment (`pinnedComment`)
-The YouTube algorithm heavily promotes videos that have active comment threads. The AI automatically generates an interactive question:
-- *Example*: `"Will you be applying for POOJA LOGISTICS IPO or skipping this one? Share your strategy in the comments below! 👇"`
-
----
-
-### Step 3: YouTube Data API v3 Upload & Scheduling (`scripts/publish_youtube.ts`)
-
-1. **Authentication**: Uses `YOUTUBE_REFRESH_TOKEN` with scopes:
-   - `https://www.googleapis.com/auth/youtube.upload`
-   - `https://www.googleapis.com/auth/youtube.force-ssl`
-2. **Resumable Upload**:
-   - Uses `youtube.videos.insert` with a read stream of `temp/[slug]/[slug].mp4`.
-   - Sets category to **`27` (Education)** and language to **`en`**.
-   - Marks `selfDeclaredMadeForKids: false`.
-3. **Publishing vs. Auto-Scheduling**:
-   - **Immediate Mode**: Sets `privacyStatus: "public"` (or `"unlisted"` for testing).
-   - **Auto-Schedule Mode**: If `YOUTUBE_AUTO_SCHEDULE=true`, calculates the next peak Indian viewing window (**10:00 AM IST** or **06:30 PM IST**) and sets `publishAt` ISO timestamp with `privacyStatus: "private"`.
-4. **Automated Comment Posting**:
-   - Immediately calls `youtube.commentThreads.insert` with the AI-generated question so the video launches with an active discussion prompt.
-
----
-
-### Step 4: Tracking & Ephemeral Storage Cleanup (`scripts/tracker.ts`)
-
-1. **Tracker Store Update**:
-   - Appends the completed upload to [`data/uploaded_youtube.json`](file:///d:/Remotion/Automation/ipo-youtube-publisher/data/uploaded_youtube.json):
-     ```json
-     {
-       "ipoSlug": "pooja-logistics",
-       "companyName": "POOJA LOGISTICS",
-       "youtubeVideoId": "abc123xyz",
-       "youtubeUrl": "https://youtu.be/abc123xyz",
-       "publishedAt": "2026-09-29T16:00:00.000Z",
-       "privacyStatus": "public",
-       "title": "POOJA LOGISTICS IPO: Apply or Avoid? 🚨 #Shorts"
-     }
+### 1. 🛡️ Strict Title Length Clamping & Name Sanitization
+- **Problem**: YouTube allows up to 100 characters in titles, but mobile YouTube Shorts feeds truncate any title longer than **60–70 characters** with an ugly ellipsis (`...`), hiding the hook and `#Shorts` tag. Furthermore, many Indian companies have huge legal names like *"Northern Arc Capital Limited"* or *"Diffusion Engineers Limited"*.
+- **Solution**:
+  1. **Legal Suffix Sanitizer**: Automatically strips corporate legal suffixes before sending to Groq or formatting titles:
+     - Strips: `Private Limited`, `Pvt Ltd`, `Pvt. Ltd.`, `Limited`, `Ltd`, `Technologies`, `Industries`, `Holdings`, `India`, `Corporation`.
+     - *Example*: `"Kalyan Jewellers India Limited"` ➔ `"Kalyan Jewellers"`
+     - *Example*: `"Pooja Logistics Limited"` ➔ `"Pooja Logistics"`
+  2. **Strict Character Budget**:
      ```
-   - Enforces a **rolling cap of 50 items FIFO** to keep the tracking file lightweight.
-2. **Zero-Disk Cleanup**:
-   - Executes `fs.rmSync("temp/[slug]", { recursive: true })` to delete the downloaded MP4 and assets immediately after upload, keeping runner disk usage near zero.
+     [Brand Name: 15-22 chars] + " IPO: " [6 chars] + [Hook: 18-22 chars] + " 🚨 #Shorts" [10 chars]
+     Total: ~55 - 63 characters (Always < 65 chars!)
+     ```
+  3. **Double-Lock Truncation Safeguard**:
+     - **Prompt Layer**: Instructs Groq to keep title strictly under 60 characters.
+     - **Code Layer**: If Groq returns a title > 68 characters, code automatically clamps and reconstructs:
+       `${sanitizedName} IPO: Apply or Avoid? 🚨 #Shorts` (Guaranteed safety).
 
 ---
 
-### Step 5: Automated Cloud Trigger (`.github/workflows/youtube_publisher.yml`)
+### 2. 🗂️ Google Drive Folder Archival (`Uploaded/`)
+- **Problem**: Leaving completed folders in the root `IPO Automation` directory creates confusion, clutters Drive, and relies entirely on local JSON tracking.
+- **Solution**:
+  - Once a video is successfully uploaded and scheduled on YouTube:
+    1. The publisher checks for (or creates) an **`Uploaded`** folder inside the Google Drive root.
+    2. Moves the entire company folder (video + `assets/ipo_data.json` + `assets/script.txt`) from `IPO Automation` into `Uploaded/` using Google Drive API:
+       ```typescript
+       await drive.files.update({
+         fileId: folderId,
+         addParents: uploadedFolderId,
+         removeParents: parentFolderId,
+         fields: 'id, parents'
+       });
+       ```
+    3. The incoming folder stays completely clean, containing only active/pending videos.
 
-1. **Schedule**:
-   - **09:30 AM IST (04:00 UTC)**: 1 hour after the morning video render.
-   - **07:30 PM IST (14:00 UTC)**: 1 hour after the evening video render.
-   - Active **7 days a week** (14 automated checks per week).
-2. **Manual On-Demand Dispatch**:
-   - You can trigger a publication run anytime from the GitHub Actions dashboard.
-3. **Git Auto-Commit**:
-   - Commits the updated `data/uploaded_youtube.json` back to `main` with `[skip ci]`.
+---
+
+### 3. 🔍 Graceful Video Existence Verification
+- **Problem**: If an automated render failed or a folder was partially created with no `.mp4` video, the publisher should not crash or trigger GitHub Actions red alerts.
+- **Solution**:
+  - When scanning an unprocessed folder, the script verifies that a valid `.mp4` file is present.
+  - If no `.mp4` is found:
+    - Logs: `⚠️ [Skip] No .mp4 video found in folder "${folder.name}". Stopping gracefully.`
+    - Exits gracefully with code `0`. No false error alarms on GitHub Actions.
+
+---
+
+### 4. ⏰ 24-Hour Forward Scheduling Buffer (Queue Delay Immunity)
+- **Problem**:
+  - GitHub Actions runners run on public cloud VMs that often experience queue delays (5 to 30 minutes during peak hours).
+  - If a video is scheduled for "15 minutes from now", a GitHub queue delay means the job might execute *after* the scheduled time, causing YouTube API to throw a fatal error: `publishAt timestamp must be in the future`.
+- **Solution**:
+  - **24-Hour Forward Window**:
+    - **Morning Execution** (e.g. 09:30 AM IST): Schedules the video for the **Next Day's Morning slot** (e.g. tomorrow at 09:00 AM IST ~23.5 hours ahead).
+    - **Evening Execution** (e.g. 07:30 PM IST): Schedules the video for the **Next Day's Evening slot** (e.g. tomorrow at 06:30 PM IST ~23 hours ahead).
+  - **Benefits**:
+    1. **100% Queue Delay Immune**: Even if GitHub Actions runner is queued for 1 hour, the schedule timestamp is still ~22-23 hours in the future. It will **never** fail.
+    2. **Algorithm Advantage**: YouTube servers have 24 hours to process high-definition video, generate AV1/VP9 codecs, transcribe automated audio captions, and prepare optimal Shorts shelf indexing before it goes public.
+    3. **Paced Cadence**: Guarantees a steady rhythm of 2 videos published per day (1 morning, 1 evening).
+
+---
+
+### 5. 🏷️ Rich SEO Keywords & Tags + JSON Tracker
+- **Search Tags (Up to 500 characters)**:
+  - High-intent keyword formula combining:
+    - **Core Brand**: `[brand]`, `[brand] ipo`, `[brand] limited ipo`
+    - **Action Intent**: `[brand] ipo apply or avoid`, `[brand] ipo review`, `[brand] ipo gmp today`
+    - **Market Queries**: `upcoming ipos 2026`, `latest ipo review`, `stock market india`, `share market shorts`
+    - **Allotment & Dates**: `[brand] ipo allotment status`, `[brand] ipo listing date`
+- **Sliding FIFO Tracking (`data/uploaded_youtube.json`)**:
+  - Maintains rolling 50 uploads with Video ID, YouTube URL, Scheduled Time, Title, and Date.
+  - Automatically committed and pushed to GitHub with `[skip ci]`.
+
+---
+
+## 3. GitHub Actions Twice-Daily Schedule
+
+The workflow runs **twice daily, 7 days a week** (14 runs/week) plus manual trigger:
+
+| Run Window | UTC Cron | IST Time | Action Taken |
+| :--- | :--- | :--- | :--- |
+| **Morning Run** | `0 4 * * *` | **09:30 AM IST** | Ingests morning video ➔ Schedules for **Tomorrow 09:00 AM IST** ➔ Archives to `Uploaded/` |
+| **Evening Run** | `0 14 * * *` | **07:30 PM IST** | Ingests evening video ➔ Schedules for **Tomorrow 06:30 PM IST** ➔ Archives to `Uploaded/` |
+| **Manual Trigger** | `workflow_dispatch` | On Demand | Instantly schedules next available video with 24-hr buffer |
+
+---
+
+## 4. Next Implementation Steps
+
+1. **Update `scripts/sync_drive.ts`**:
+   - Add `moveFolderToArchive(folderId, currentParentId)` to relocate completed folders to `Uploaded/`.
+   - Add video existence verification before initiating download.
+2. **Update `scripts/generate_metadata.ts`**:
+   - Implement `cleanCompanyName()` helper to strip legal suffixes (`Limited`, `Pvt Ltd`, etc.).
+   - Enforce hard clamp on `title.length <= 68` with fallback truncation.
+3. **Update `scripts/publish_youtube.ts`**:
+   - Implement `calculate24HourScheduleTime()` matching the morning ➔ next morning, evening ➔ next evening logic.
+4. **Update `scripts/pipeline.ts`**:
+   - Wire the graceful exit when no video is found.
+   - Execute the folder move to `Uploaded/` upon successful upload.
+5. **Update `.github/workflows/youtube_publisher.yml`**:
+   - Ensure `YOUTUBE_AUTO_SCHEDULE=true` is enabled by default in GitHub Actions.

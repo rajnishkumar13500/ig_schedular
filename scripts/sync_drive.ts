@@ -64,9 +64,17 @@ export async function getUnprocessedIPOsFromDrive(): Promise<DriveIPOFolders[]> 
   const folders = res.data.files || [];
   console.log(`📁 Found ${folders.length} folder(s) in Drive.`);
 
+  const ignoredFolders = ["uploaded", "processed", "archive", "archives"];
   const unprocessed: DriveIPOFolders[] = [];
+
   for (const folder of folders) {
     if (!folder.name || !folder.id) continue;
+
+    // Ignore archive/uploaded folders
+    if (ignoredFolders.includes(folder.name.toLowerCase().trim())) {
+      continue;
+    }
+
     const slug = folder.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     if (!isIPOAlreadyOnYouTube(slug) && !isIPOAlreadyOnYouTube(folder.name)) {
       unprocessed.push({
@@ -80,6 +88,79 @@ export async function getUnprocessedIPOsFromDrive(): Promise<DriveIPOFolders[]> 
   }
 
   return unprocessed;
+}
+
+/**
+ * Checks whether a given Google Drive folder contains a valid .mp4 video file
+ */
+export async function folderContainsVideo(folderId: string): Promise<boolean> {
+  const drive = getDriveClient();
+  if (!drive) return false;
+
+  const res = await drive.files.list({
+    q: `'${folderId}' in parents and trashed = false`,
+    fields: "files(id, name, mimeType)",
+  });
+
+  const files = res.data.files || [];
+  return files.some((f) => f.name?.toLowerCase().endsWith(".mp4"));
+}
+
+/**
+ * Finds or creates the 'Uploaded' archive folder in Google Drive
+ */
+export async function getOrCreateArchiveFolder(archiveFolderName: string = "Uploaded"): Promise<string> {
+  const drive = getDriveClient();
+  const parentFolderId = process.env.GDRIVE_PARENT_FOLDER_ID;
+  if (!drive || !parentFolderId) throw new Error("Drive client or parent folder ID missing.");
+
+  // Check if archive folder already exists
+  const res = await drive.files.list({
+    q: `'${parentFolderId}' in parents and name = '${archiveFolderName}' and mimeType = 'application/vnd.google-apps.folder' and trashed = false`,
+    fields: "files(id, name)",
+  });
+
+  if (res.data.files && res.data.files.length > 0) {
+    return res.data.files[0].id!;
+  }
+
+  // Create archive folder
+  console.log(`📁 Creating "${archiveFolderName}" archive folder in Google Drive...`);
+  const createRes = await drive.files.create({
+    requestBody: {
+      name: archiveFolderName,
+      mimeType: "application/vnd.google-apps.folder",
+      parents: [parentFolderId],
+    },
+    fields: "id",
+  });
+
+  return createRes.data.id!;
+}
+
+/**
+ * Moves a processed company folder from the incoming root to the 'Uploaded/' archive folder
+ */
+export async function moveFolderToArchive(
+  folderId: string,
+  folderName: string,
+  archiveFolderName: string = "Uploaded"
+): Promise<void> {
+  const drive = getDriveClient();
+  const parentFolderId = process.env.GDRIVE_PARENT_FOLDER_ID;
+  if (!drive || !parentFolderId) throw new Error("Drive client or parent folder ID missing.");
+
+  const archiveFolderId = await getOrCreateArchiveFolder(archiveFolderName);
+
+  console.log(`📦 Moving company folder "${folderName}" to "${archiveFolderName}/" on Google Drive...`);
+  await drive.files.update({
+    fileId: folderId,
+    addParents: archiveFolderId,
+    removeParents: parentFolderId,
+    fields: "id, parents",
+  });
+
+  console.log(`✅ Successfully moved "${folderName}" to "${archiveFolderName}/". Main folder remains clean!`);
 }
 
 /**
@@ -130,7 +211,7 @@ export async function downloadIPOAssetsFromDrive(
   );
 
   if (!videoFile) {
-    console.error(`❌ No .mp4 video found in folder "${folder.name}"`);
+    console.warn(`⚠️ No .mp4 video found in folder "${folder.name}"`);
     return null;
   }
 
@@ -187,6 +268,9 @@ if (require.main === module) {
   (async () => {
     const unprocessed = await getUnprocessedIPOsFromDrive();
     console.log(`\n📋 Found ${unprocessed.length} unworked IPO folder(s) ready for YouTube:`);
-    unprocessed.forEach((u, i) => console.log(`   ${i + 1}. ${u.name} (slug: ${u.slug})`));
+    for (const u of unprocessed) {
+      const hasVideo = await folderContainsVideo(u.id);
+      console.log(`   • ${u.name} (slug: ${u.slug}) - Video present: ${hasVideo ? "✅ Yes" : "❌ No"}`);
+    }
   })();
 }
