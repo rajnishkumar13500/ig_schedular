@@ -2,7 +2,6 @@ import fs from "fs";
 import path from "path";
 import { google } from "googleapis";
 import dotenv from "dotenv";
-import { isIPOAlreadyOnYouTube } from "./tracker";
 
 dotenv.config();
 
@@ -42,7 +41,8 @@ export function getDriveClient() {
 }
 
 /**
- * Finds all unprocessed IPO folders in the Drive parent folder
+ * Finds all unprocessed IPO folders in the Drive parent folder.
+ * Any non-archive folder present in the incoming root is treated as a candidate.
  */
 export async function getUnprocessedIPOsFromDrive(): Promise<DriveIPOFolders[]> {
   const parentFolderId = process.env.GDRIVE_PARENT_FOLDER_ID;
@@ -62,7 +62,7 @@ export async function getUnprocessedIPOsFromDrive(): Promise<DriveIPOFolders[]> 
   });
 
   const folders = res.data.files || [];
-  console.log(`📁 Found ${folders.length} folder(s) in Drive.`);
+  console.log(`📁 Found ${folders.length} folder(s) in Drive:`, folders.map((f) => f.name));
 
   const ignoredFolders = ["uploaded", "processed", "archive", "archives"];
   const unprocessed: DriveIPOFolders[] = [];
@@ -76,15 +76,11 @@ export async function getUnprocessedIPOsFromDrive(): Promise<DriveIPOFolders[]> 
     }
 
     const slug = folder.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    if (!isIPOAlreadyOnYouTube(slug) && !isIPOAlreadyOnYouTube(folder.name)) {
-      unprocessed.push({
-        id: folder.id,
-        name: folder.name,
-        slug,
-      });
-    } else {
-      console.log(`   ⚡ [Already Uploaded] Skipping: "${folder.name}"`);
-    }
+    unprocessed.push({
+      id: folder.id,
+      name: folder.name,
+      slug,
+    });
   }
 
   return unprocessed;
@@ -147,16 +143,20 @@ export async function moveFolderToArchive(
   archiveFolderName: string = "Uploaded"
 ): Promise<void> {
   const drive = getDriveClient();
-  const parentFolderId = process.env.GDRIVE_PARENT_FOLDER_ID;
-  if (!drive || !parentFolderId) throw new Error("Drive client or parent folder ID missing.");
+  if (!drive) throw new Error("Drive client missing.");
 
   const archiveFolderId = await getOrCreateArchiveFolder(archiveFolderName);
 
   console.log(`📦 Moving company folder "${folderName}" to "${archiveFolderName}/" on Google Drive...`);
+
+  // Dynamically resolve existing parents to ensure clean, reliable relocation
+  const file = await drive.files.get({ fileId: folderId, fields: "id, parents" });
+  const currentParents = (file.data.parents || []).join(",");
+
   await drive.files.update({
     fileId: folderId,
     addParents: archiveFolderId,
-    removeParents: parentFolderId,
+    removeParents: currentParents,
     fields: "id, parents",
   });
 
