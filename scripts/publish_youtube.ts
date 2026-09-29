@@ -2,7 +2,12 @@ import fs from "fs";
 import path from "path";
 import dotenv from "dotenv";
 import { getYouTubeClient } from "./test_youtube";
-import { YouTubeAIMetadata } from "./generate_metadata";
+import {
+  YouTubeAIMetadata,
+  sanitizeYouTubeDescription,
+  sanitizeYouTubeTitle,
+  sanitizeYouTubeTags,
+} from "./generate_metadata";
 
 dotenv.config();
 
@@ -92,11 +97,15 @@ export async function uploadToYouTube(
     console.log(`   🔒 Privacy Status: ${privacyStatus}`);
   }
 
+  const cleanTitle = sanitizeYouTubeTitle(metadata.title);
+  const cleanDescription = sanitizeYouTubeDescription(metadata.description);
+  const cleanTags = sanitizeYouTubeTags(metadata.tags);
+
   const requestBody: any = {
     snippet: {
-      title: metadata.title,
-      description: metadata.description,
-      tags: metadata.tags,
+      title: cleanTitle,
+      description: cleanDescription,
+      tags: cleanTags,
       categoryId: process.env.YOUTUBE_CATEGORY_ID || "27", // 27 = Education
       defaultLanguage: process.env.YOUTUBE_DEFAULT_LANGUAGE || "en",
     },
