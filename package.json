@@ -6,6 +6,7 @@
   "scripts": {
     "auth:youtube": "tsx scripts/auth_youtube.ts",
     "test:youtube": "tsx scripts/test_youtube.ts",
+    "test:instagram": "tsx scripts/test_instagram.ts",
     "sync:drive": "tsx scripts/sync_drive.ts",
     "generate:metadata": "tsx scripts/generate_metadata.ts",
     "verify": "tsx scripts/verify_pipeline.ts",

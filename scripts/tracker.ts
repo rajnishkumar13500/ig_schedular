@@ -76,3 +76,78 @@ export function recordYouTubeUpload(entry: YouTubeUploadRecord): void {
   }
   saveYouTubeTracker(store);
 }
+
+// ─── INSTAGRAM TRACKER ────────────────────────────────────────────────────────
+
+export interface InstagramUploadRecord {
+  ipoSlug: string;
+  companyName: string;
+  instagramMediaId: string;
+  permalink?: string;
+  publishedAt: string;
+  captionPreview: string;
+}
+
+export interface InstagramTrackerStore {
+  version: number;
+  lastUpdated: string;
+  history: InstagramUploadRecord[];
+}
+
+const IG_TRACKER_PATH = path.resolve(__dirname, "../data/uploaded_instagram.json");
+
+export function loadInstagramTracker(): InstagramTrackerStore {
+  if (!fs.existsSync(IG_TRACKER_PATH)) {
+    const initial: InstagramTrackerStore = {
+      version: 1,
+      lastUpdated: new Date().toISOString(),
+      history: [],
+    };
+    fs.mkdirSync(path.dirname(IG_TRACKER_PATH), { recursive: true });
+    fs.writeFileSync(IG_TRACKER_PATH, JSON.stringify(initial, null, 2), "utf-8");
+    return initial;
+  }
+  const raw = fs.readFileSync(IG_TRACKER_PATH, "utf-8");
+  return JSON.parse(raw) as InstagramTrackerStore;
+}
+
+export function saveInstagramTracker(store: InstagramTrackerStore): void {
+  store.lastUpdated = new Date().toISOString();
+  if (store.history.length > MAX_HISTORY) {
+    store.history = store.history.slice(0, MAX_HISTORY);
+  }
+  fs.mkdirSync(path.dirname(IG_TRACKER_PATH), { recursive: true });
+  fs.writeFileSync(IG_TRACKER_PATH, JSON.stringify(store, null, 2), "utf-8");
+}
+
+export function isIPOAlreadyOnInstagram(ipoSlugOrName: string): boolean {
+  const store = loadInstagramTracker();
+  const normalized = ipoSlugOrName.toLowerCase().replace(/[^a-z0-9]/g, "");
+  return store.history.some((item) => {
+    const itemSlugNorm = item.ipoSlug.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const itemNameNorm = item.companyName.toLowerCase().replace(/[^a-z0-9]/g, "");
+    return (
+      itemSlugNorm === normalized ||
+      itemNameNorm === normalized ||
+      normalized.includes(itemSlugNorm) ||
+      normalized.includes(itemNameNorm)
+    );
+  });
+}
+
+export function recordInstagramUpload(entry: InstagramUploadRecord): void {
+  const store = loadInstagramTracker();
+  const existingIdx = store.history.findIndex(
+    (h) => h.ipoSlug.toLowerCase() === entry.ipoSlug.toLowerCase()
+  );
+  if (existingIdx >= 0) {
+    store.history[existingIdx] = entry;
+  } else {
+    store.history.unshift(entry);
+  }
+  if (store.history.length > MAX_HISTORY) {
+    store.history = store.history.slice(0, MAX_HISTORY);
+  }
+  saveInstagramTracker(store);
+}
+

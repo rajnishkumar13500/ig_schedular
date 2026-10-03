@@ -1,4 +1,4 @@
-name: Scheduled YouTube IPO Shorts Publisher
+name: Scheduled Multi-Platform IPO Publisher (YouTube & Instagram)
 
 on:
   schedule:
@@ -9,12 +9,20 @@ on:
 
   workflow_dispatch:
     inputs:
+      publish_youtube:
+        description: 'Publish to YouTube (true/false)'
+        required: false
+        default: 'true'
+      publish_instagram:
+        description: 'Publish to Instagram Reels (true/false)'
+        required: false
+        default: 'true'
       auto_schedule:
-        description: 'Auto schedule video 24h forward (true/false)'
+        description: 'Auto schedule YouTube video 24h forward (true/false)'
         required: false
         default: 'true'
       privacy_status:
-        description: 'Privacy status (public, unlisted, private) - used if auto_schedule is false'
+        description: 'YouTube privacy status if auto_schedule is false (public, unlisted, private)'
         required: false
         default: 'private'
 
@@ -22,14 +30,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: youtube-publisher
+  group: multi-platform-publisher
   cancel-in-progress: false
 
 jobs:
-  publish-shorts:
-    name: Sync Drive, Generate SEO & Publish to YouTube
+  publish-videos:
+    name: Sync Drive, Generate SEO & Publish to YouTube and Instagram
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - name: Checkout Code
@@ -47,33 +55,47 @@ jobs:
       - name: Install NPM Dependencies
         run: npm ci
 
-      - name: Run YouTube Auto-Publisher Pipeline
+      - name: Run Multi-Platform Auto-Publisher Pipeline
         env:
+          # Google Drive Ingestion
           GDRIVE_REFRESH_TOKEN: ${{ secrets.GDRIVE_REFRESH_TOKEN }}
           GDRIVE_CLIENT_ID: ${{ secrets.GDRIVE_CLIENT_ID }}
           GDRIVE_CLIENT_SECRET: ${{ secrets.GDRIVE_CLIENT_SECRET }}
           GDRIVE_PARENT_FOLDER_ID: ${{ secrets.GDRIVE_PARENT_FOLDER_ID }}
+
+          # YouTube Data API v3
           YOUTUBE_CLIENT_ID: ${{ secrets.YOUTUBE_CLIENT_ID }}
           YOUTUBE_CLIENT_SECRET: ${{ secrets.YOUTUBE_CLIENT_SECRET }}
           YOUTUBE_REFRESH_TOKEN: ${{ secrets.YOUTUBE_REFRESH_TOKEN }}
-          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
-          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'qwen/qwen3.8-27b' }}
           YOUTUBE_AUTO_SCHEDULE: ${{ github.event.inputs.auto_schedule || 'true' }}
           YOUTUBE_PRIVACY_STATUS: ${{ github.event.inputs.privacy_status || 'private' }}
           YOUTUBE_CATEGORY_ID: ${{ vars.YOUTUBE_CATEGORY_ID || '27' }}
           YOUTUBE_DEFAULT_LANGUAGE: ${{ vars.YOUTUBE_DEFAULT_LANGUAGE || 'en' }}
+
+          # Meta Instagram Graph API
+          INSTAGRAM_ACCOUNT_ID: ${{ secrets.INSTAGRAM_ACCOUNT_ID }}
+          INSTAGRAM_ACCESS_TOKEN: ${{ secrets.INSTAGRAM_ACCESS_TOKEN }}
+          GRAPH_API_VERSION: ${{ vars.GRAPH_API_VERSION || 'v21.0' }}
+
+          # Platform Toggles
+          ENABLE_YOUTUBE: ${{ github.event.inputs.publish_youtube || 'true' }}
+          ENABLE_INSTAGRAM: ${{ github.event.inputs.publish_instagram || 'true' }}
+
+          # AI Metadata Generation (Groq)
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          GROQ_MODEL: ${{ vars.GROQ_MODEL || 'qwen/qwen3.8-27b' }}
         run: npm run publish
 
-      - name: Commit & Push Updated Upload Tracker
+      - name: Commit & Push Updated Upload Trackers
         run: |
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/uploaded_youtube.json
+          git add data/uploaded_youtube.json data/uploaded_instagram.json
           if git diff --staged --quiet; then
-            echo "✨ No new videos uploaded. Tracker is up-to-date."
+            echo "✨ No new videos uploaded. Trackers are up-to-date."
           else
-            git commit -m "chore: record new YouTube video upload [skip ci]"
+            git commit -m "chore: record new video upload to YouTube and/or Instagram [skip ci]"
             git pull --rebase origin main
             git push origin main
-            echo "✅ Tracker committed and pushed to main."
+            echo "✅ Trackers committed and pushed to main."
           fi
