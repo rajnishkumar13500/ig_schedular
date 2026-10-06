@@ -1,14 +1,12 @@
 {
-  "name": "ipo-youtube-publisher",
+  "name": "ipo-instagram-publisher",
   "version": "1.0.0",
-  "description": "Automated YouTube Shorts publisher and viral metadata generator for IPO videos",
+  "description": "Automated Instagram Reels publisher and viral caption generator for IPO videos",
   "main": "scripts/pipeline.ts",
   "scripts": {
-    "auth:youtube": "tsx scripts/auth_youtube.ts",
-    "test:youtube": "tsx scripts/test_youtube.ts",
     "test:instagram": "tsx scripts/test_instagram.ts",
     "sync:drive": "tsx scripts/sync_drive.ts",
-    "generate:metadata": "tsx scripts/generate_metadata.ts",
+    "generate:caption": "tsx scripts/generate_metadata.ts",
     "verify": "tsx scripts/verify_pipeline.ts",
     "publish": "tsx scripts/pipeline.ts",
     "pipeline": "tsx scripts/pipeline.ts"
@@ -24,12 +22,12 @@
   },
   "keywords": [
     "ipo",
-    "youtube",
+    "instagram",
+    "reels",
     "automation",
     "publisher",
     "groq",
-    "qwen",
-    "seo"
+    "qwen"
   ],
   "author": "",
   "license": "ISC"

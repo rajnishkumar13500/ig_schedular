@@ -267,7 +267,7 @@ export async function downloadIPOAssetsFromDrive(
 if (require.main === module) {
   (async () => {
     const unprocessed = await getUnprocessedIPOsFromDrive();
-    console.log(`\n📋 Found ${unprocessed.length} unworked IPO folder(s) ready for YouTube:`);
+    console.log(`\n📋 Found ${unprocessed.length} unworked IPO folder(s) ready for Instagram Reels:`);
     for (const u of unprocessed) {
       const hasVideo = await folderContainsVideo(u.id);
       console.log(`   • ${u.name} (slug: ${u.slug}) - Video present: ${hasVideo ? "✅ Yes" : "❌ No"}`);
