@@ -4,6 +4,8 @@
   "description": "Automated Instagram Reels publisher and viral caption generator for IPO videos",
   "main": "scripts/pipeline.ts",
   "scripts": {
+    "auth:drive": "tsx scripts/auth_drive.ts",
+    "auth:youtube": "tsx scripts/auth_youtube.ts",
     "test:instagram": "tsx scripts/test_instagram.ts",
     "sync:drive": "tsx scripts/sync_drive.ts",
     "generate:caption": "tsx scripts/generate_metadata.ts",
